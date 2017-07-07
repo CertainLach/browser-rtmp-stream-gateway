@@ -6,12 +6,20 @@
 
 <body>
     <video id="videoOutput" autoplay muted></video>
+    <pre id="log"></pre>
 
     <script>
         /*global navigator, MediaRecorder, location*/
-
+        let log=document.getElementById('log');
+        function writeLog(line){
+            log.innerHTML+=`\n${line}`;
+        }
         let mediaRecorder = null;
         let ws = null;
+        let url;
+        let key;
+        let empty;
+        let stream;
 
         if (location.hash === '' || location.hash.split('#').length !== 3) {
             alert('Укажи данные для стрима в hash!');
@@ -20,22 +28,51 @@
             ws = new WebSocket('wss://ide.f6cf.pw:8448');
             ws.binaryType = "arraybuffer";
             ws.onopen = async e => {
-                console.log('WebSocket opened');
-                let [empty, url, key] = location.hash.split('#');
+                writeLog('WS Open');
+                [empty, url, key] = location.hash.split('#');
+                writeLog('>> '+url+'/'+key);
                 // TODO: Detect browser codec
+                writeLog('rtmp url = '+`${url}/${key}`);
                 try {
+                    writeLog('WebSocket ready, sending settings');
                     await requestMedia([url, key].join('/'), 'libvpx');
                 } catch (e) {
-                    console.log(e);
+                    writeLog(e.message);
                 }
             };
+            let started=false;
+            ws.onmessage = e => {
+                if(started)return;
+                started=true;
+                writeLog('Server ready, starting data sending');
+
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp8',
+                    videoBitsPerSecond: 382000
+                });
+                mediaRecorder.start(2000);
+                mediaRecorder.onstop = e => {
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                let availOne = false;
+                mediaRecorder.ondataavailable = e => {
+                    if(!availOne){
+                        writeLog('Stream working!');
+                        availOne = true;
+                    }
+                    ws.send(e.data);
+                };
+                mediaRecorder.onerror = e=>{
+                    writeLog(e.message);
+                };
+            };
             ws.onerror = e => {
-                console.log('WebSocket Error');
+                writeLog(e.message);
                 if (mediaRecorder !== null)
                     mediaRecorder.stop();
             };
             ws.onclose = e => {
-                console.log(`WebSocket Close: code=${e.code}`);
+                writeLog('End Code '+e.code);
                 if (mediaRecorder !== null)
                     mediaRecorder.stop();
             };
@@ -44,29 +81,19 @@
         const videoOutput = document.getElementById('videoOutput');
 
         async function requestMedia(url, codec) {
-            let stream = await navigator.mediaDevices.getUserMedia({
+            stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
                 video: true
             });
             videoOutput.loadedmetadata = evt => {
-                console.log("Local video source size:" + videoOutput.videoWidth + "x" + videoOutput.videoHeight);
+                writeLog("Local video source size:" + videoOutput.videoWidth + "x" + videoOutput.videoHeight);
             };
             videoOutput.srcObject = stream;
 
+            writeLog('Sending start packet');
             // Start packet
             ws.send(`${url}\xf6\xcf${codec}`);
-
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'video/webm;codecs=vp8',
-                videoBitsPerSecond: 382000
-            });
-            mediaRecorder.start(2000);
-            mediaRecorder.onstop = e => {
-                stream.getTracks().forEach(track => track.stop());
-            };
-            mediaRecorder.ondataavailable = e => {
-                ws.send(e.data);
-            };
+            writeLog('Done, waiting for server');
         };
     </script>
 </body>

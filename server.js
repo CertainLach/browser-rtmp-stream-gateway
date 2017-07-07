@@ -35,6 +35,7 @@ let users = 0;
 wss.on('connection', function(ws, req) {
     let ffmpeg = null;
     let user = users++;
+    let dataSent = false;
     console.log('>> USER CONNECTED', user);
     ws.on('message', data => {
         if (ffmpeg === null) {
@@ -44,13 +45,13 @@ wss.on('connection', function(ws, req) {
 
             // For debug
 
-            // ffmpeg.stdout.on('data', d=>{
-            //     console.log(d.toString());
-            // });
+            ffmpeg.stdout.on('data', d=>{
+                console.log(d.toString());
+            });
 
-            // ffmpeg.stderr.on('data', d=>{
-            //     console.log(d.toString());
-            // });
+            ffmpeg.stderr.on('data', d=>{
+                console.log(d.toString());
+            });
 
             ffmpeg.on('error', e => {
                 ws.close(1011);
@@ -60,7 +61,15 @@ wss.on('connection', function(ws, req) {
                 ws.close(1011);
             });
             console.log('>> STREAM STARTED', user);
+            setTimeout(()=>{
+                console.log('>> START PACKET SENT', user);
+                ws.send('\x44');
+            },2000);
         } else {
+            if(!dataSent){
+                console.log('>> GOT FIRST PACKET OF DATA');
+                dataSent=true;
+            }
             ffmpeg.stdin.write(new Buffer(new Uint8Array(data)));
         }
     });
@@ -83,3 +92,5 @@ wss.on('connection', function(ws, req) {
         ws.close(1012);
     });
 });
+
+process.on('uncaughtException', function (err) { console.log(err) });
