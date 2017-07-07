@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+</head>
+
+<body>
+    <video id="videoOutput" autoplay muted></video>
+
+    <script>
+        /*global navigator, MediaRecorder, location*/
+
+        let mediaRecorder = null;
+        let ws = null;
+
+        if (location.hash === '' || location.hash.split('#') !== 2) {
+            alert('Укажи данные для стрима в hash!');
+        } else {
+            ws = new WebSocket('wss://ide.f6cf.pw:8448');
+            ws.binaryType = "arraybuffer";
+            ws.onopen = async e => {
+                console.log('WebSocket opened');
+                let [empty, url, key] = location.hash.split('#');
+                // TODO: Detect browser codec
+                try {
+                    await requestMedia([url, key].join('/'), 'libvpx');
+                } catch (e) {
+                    console.log(e);
+                }
+            };
+            ws.onerror = e => {
+                console.log('WebSocket Error');
+                if (mediaRecorder !== null)
+                    mediaRecorder.stop();
+            };
+            ws.onclose = e => {
+                console.log(`WebSocket Close: code=${e.code}`);
+                if (mediaRecorder !== null)
+                    mediaRecorder.stop();
+            };
+        }
+
+        const videoOutput = document.getElementById('videoOutput');
+
+        async function requestMedia(url, codec) {
+            let stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: true
+            });
+            videoOutput.loadedmetadata = evt => {
+                console.log("Local video source size:" + videoOutput.videoWidth + "x" + videoOutput.videoHeight);
+            };
+            videoOutput.srcObject = stream;
+
+            // Start packet
+            ws.send(`${url}\xf6\xcf${codec}`);
+
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp8',
+                videoBitsPerSecond: 382000
+            });
+            mediaRecorder.start(2000);
+            mediaRecorder.onstop = e => {
+                stream.getTracks().forEach(track => track.stop());
+            };
+            mediaRecorder.ondataavailable = e => {
+                ws.send(e.data);
+            };
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "space-bridge",
+  "version": "1.0.0",
+  "description": "LIVE Bridge for SpaceVK",
+  "dependencies": {
+    "uws": "latest"
+  }
+}
