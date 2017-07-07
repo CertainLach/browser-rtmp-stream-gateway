@@ -13,8 +13,9 @@
         let mediaRecorder = null;
         let ws = null;
 
-        if (location.hash === '' || location.hash.split('#') !== 2) {
+        if (location.hash === '' || location.hash.split('#').length !== 3) {
             alert('Укажи данные для стрима в hash!');
+            console.log(location.hash);
         } else {
             ws = new WebSocket('wss://ide.f6cf.pw:8448');
             ws.binaryType = "arraybuffer";
